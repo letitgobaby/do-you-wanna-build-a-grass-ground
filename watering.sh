@@ -124,17 +124,14 @@ generate_commit() {
     fi
 }
 
-current_date="$START_DATE"
-while [[ "$current_date" < "$END_DATE" ]]; do
-    if ! has_commit_on_date "$current_date"; then
-        generate_commits_for_day "$current_date"
-    fi
-    current_date=$(date -j -v+1d -f "%Y-%m-%d" "$current_date" +"%Y-%m-%d")
+push_commits() {
+    git push -u origin main
     if [ $? -ne 0 ]; then
-        echo "Failed to increment the date: $current_date"
+        echo "Failed to push the changes to the remote repository."
         exit 1
     fi
-done
+}
+
 
 # 4. Push the changes to the remote repository
 if git remote | grep origin; then
@@ -144,8 +141,33 @@ else
     exit 1
 fi
 
-git push -u origin main
-if [ $? -ne 0 ]; then
-    echo "Failed to push the changes to the remote repository."
-    exit 1
+
+current_date="$START_DATE"
+commit_count=0 # The number of commits to generate
+commit_batch_size=200 # The number of commits to generate in a batch
+
+while [[ "$current_date" < "$END_DATE" ]]; do
+    if ! has_commit_on_date "$current_date"; then
+        generate_commits_for_day "$current_date"
+        ((commit_count++))
+    fi
+
+    # if the commit count reaches the batch size, push the commits to the remote repository
+    if [ $commit_count -ge $commit_batch_size ]; then
+        echo "Pushing 100 commits to the remote repository..."
+        push_commits
+        commit_count=0 
+    fi
+
+    current_date=$(date -j -v+1d -f "%Y-%m-%d" "$current_date" +"%Y-%m-%d")
+    if [ $? -ne 0 ]; then
+        echo "Failed to increment the date: $current_date"
+        exit 1
+    fi
+done
+
+# Push the remaining commits to the remote repository
+if [ $commit_count -gt 0 ]; then
+    echo "Pushing the remaining commits to the remote repository..."
+    push_commits
 fi
